@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LogiPilot Admin — Fleet & Loads</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a1412; --panel: #0f1f1a; --ink: #e7f2ec; --muted: #8aa396;
+      --line: rgba(231,242,236,.12); --accent: #2fd67b; --warn: #e8b45a; --danger: #ef6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background: linear-gradient(165deg, #07110e, #0d1a16 55%, #0a1412);
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 1.25rem 1.2rem 3rem; }
+    nav { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+    nav a.active { color: var(--accent); font-weight: 600; }
+    h1 { font-family: Sora, sans-serif; font-size: clamp(1.5rem, 3vw, 2rem); margin: 0.2rem 0; color: var(--accent); }
+    .lead { color: var(--muted); max-width: 42rem; line-height: 1.5; margin-bottom: 1.25rem; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+    @media (min-width: 960px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem;
+    }
+    .panel h2 { font-family: Sora, sans-serif; font-size: 1rem; margin: 0 0 0.35rem; }
+    .help { color: var(--muted); font-size: 0.82rem; margin: 0 0 0.85rem; line-height: 1.4; }
+    label { display: block; font-size: 0.72rem; color: var(--muted); margin: 0.35rem 0 0.15rem; }
+    input, select, textarea {
+      width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #07110e;
+      color: var(--ink); padding: 0.55rem 0.65rem; font: inherit;
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    button {
+      font: inherit; border: 0; border-radius: 10px; padding: 0.6rem 0.95rem;
+      background: var(--accent); color: #062015; font-weight: 700; cursor: pointer; margin-top: 0.65rem;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th, td { text-align: left; padding: 0.45rem 0.35rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge {
+      display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 6px;
+      background: rgba(47,214,123,.15); color: var(--accent);
+    }
+    .badge.warn { background: rgba(232,180,90,.15); color: var(--warn); }
+    .toast {
+      position: fixed; bottom: 1rem; right: 1rem; background: #10241c; border: 1px solid rgba(47,214,123,.4);
+      padding: 0.75rem 1rem; border-radius: 10px; display: none; max-width: 26rem; z-index: 20;
+    }
+    .steps { margin: 0 0 1rem; padding-left: 1.1rem; color: var(--muted); font-size: 0.86rem; line-height: 1.5; }
+    .full { grid-column: 1 / -1; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
+    .chip {
+      font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 999px; border: 1px solid var(--line);
+      cursor: pointer; user-select: none;
+    }
+    .chip.on { background: rgba(47,214,123,.18); border-color: rgba(47,214,123,.45); color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <a href="/">← Operations console</a>
+      <span style="color:var(--muted)">·</span>
+      <a href="/admin" class="active">Admin</a>
+    </nav>
+    <h1>Admin · Fleet & loads</h1>
+    <p class="lead">
+      Register trucks and shipments here. New trucks appear on the live map and in matching.
+      New loads show up as <strong>open loads</strong> until approved onto a truck.
+    </p>
+
+    <ol class="steps">
+      <li><strong>Add a truck</strong> with location, capacity, and optional corridor stops.</li>
+      <li><strong>Add a load</strong> (origin → destination, weight, shipper).</li>
+      <li>Open <a href="/" style="color:var(--accent)">Operations</a> to see consolidations and approve.</li>
+    </ol>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Add truck (new fleet unit)</h2>
+        <p class="help">Creates a vehicle + map position. Optional stops build a planned corridor for pooling.</p>
+        <div class="row2">
+          <div>
+            <label>Truck ID (optional)</label>
+            <input id="v-id" placeholder="Auto e.g. VEH-A1B2C3" />
+          </div>
+          <div>
+            <label>Primary shipper / company</label>
+            <input id="v-shipper" placeholder="e.g. Northern Retail" />
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label>Current location *</label>
+            <select id="v-loc"></select>
+          </div>
+          <div>
+            <label>Status</label>
+            <select id="v-status">
+              <option value="available">available (idle)</option>
+              <option value="in_transit">in_transit (on the road)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label>Capacity (kg) *</label>
+            <input id="v-kg" type="number" value="8000" min="100" />
+          </div>
+          <div>
+            <label>Capacity (m³)</label>
+            <input id="v-m3" type="number" value="25" min="1" step="0.1" />
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label>Already used (kg)</label>
+            <input id="v-used-kg" type="number" value="0" min="0" />
+          </div>
+          <div>
+            <label>Cargo class onboard</label>
+            <select id="v-cargo">
+              <option value="general">general</option>
+              <option value="food">food</option>
+              <option value="hazardous">hazardous</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label>Fixed cost (₹)</label>
+            <input id="v-fixed" type="number" value="5000" />
+          </div>
+          <div>
+            <label>Cost per km (₹)</label>
+            <input id="v-var" type="number" value="20" step="0.5" />
+          </div>
+        </div>
+        <label>Planned corridor stops (after current location)</label>
+        <p class="help" style="margin-top:0">Click cities to add them in order. Example: Hyderabad → Chennai.</p>
+        <div class="chips" id="v-stops-chips"></div>
+        <div id="v-stops-selected" class="help" style="margin-top:0.4rem">No stops selected — truck is idle at current location.</div>
+        <button type="button" id="btn-add-vehicle">Add truck to fleet</button>
+        <button type="button" class="secondary" id="btn-reset">Reset all demo data</button>
+      </section>
+
+      <section class="panel">
+        <h2>Add load (open shipment)</h2>
+        <p class="help">Unassigned shipment waiting to be pooled onto a truck with spare capacity.</p>
+        <div class="row2">
+          <div>
+            <label>Shipper name *</label>
+            <input id="s-shipper" value="NewShipper Co" />
+          </div>
+          <div>
+            <label>Cargo class</label>
+            <select id="s-cargo">
+              <option value="general">general</option>
+              <option value="food">food</option>
+              <option value="hazardous">hazardous</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label>Origin *</label>
+            <select id="s-origin"></select>
+          </div>
+          <div>
+            <label>Destination *</label>
+            <select id="s-dest"></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label>Weight (kg) *</label>
+            <input id="s-kg" type="number" value="1500" min="1" />
+          </div>
+          <div>
+            <label>Volume (m³)</label>
+            <input id="s-m3" type="number" value="3" min="0.1" step="0.1" />
+          </div>
+        </div>
+        <label>Deadline</label>
+        <input id="s-deadline" />
+        <button type="button" id="btn-add-ship">Add open load</button>
+        <p class="help" style="margin-top:0.75rem">
+          <strong>In transit</strong> = truck is moving on its route.<br/>
+          <strong>Open load</strong> = shipment not yet assigned to any truck.
+        </p>
+      </section>
+
+      <section class="panel full">
+        <h2>Current fleet</h2>
+        <p class="help">All trucks in SQLite. Refresh after adding.</p>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Shipper</th><th>Status</th><th>Location</th>
+                <th>Fill</th><th>Spare kg</th><th>Route</th>
+              </tr>
+            </thead>
+            <tbody id="fleet-body"><tr><td colspan="7">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel full">
+        <h2>Open shipments</h2>
+        <p class="help">Waiting for consolidation. Assigned loads are hidden here.</p>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Shipper</th><th>Origin → Destination</th><th>Weight</th><th>Cargo</th><th>Deadline</th>
+              </tr>
+            </thead>
+            <tbody id="ship-body"><tr><td colspan="6">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const state = { locations: [], stopIds: [] };
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg; el.style.display = "block";
+      setTimeout(() => el.style.display = "none", 3500);
+    }
+    async function j(url, opts) {
+      const r = await fetch(url, opts);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+      return data;
+    }
+    function locName(id) {
+      const l = state.locations.find(x => x.location_id === id);
+      return l ? l.name : id;
+    }
+    function fillSelects() {
+      const opts = state.locations.map(l =>
+        `<option value="${l.location_id}">${l.name} (${l.location_id})</option>`).join("");
+      ["v-loc","s-origin","s-dest"].forEach(id => { document.getElementById(id).innerHTML = opts; });
+      document.getElementById("v-loc").value = "LOC-HYD";
+      document.getElementById("s-origin").value = "LOC-HYD";
+      document.getElementById("s-dest").value = "LOC-MAA";
+      const chips = document.getElementById("v-stops-chips");
+      chips.innerHTML = state.locations.map(l =>
+        `<span class="chip" data-id="${l.location_id}">${l.name}</span>`).join("");
+      chips.querySelectorAll(".chip").forEach(ch => {
+        ch.onclick = () => {
+          const id = ch.dataset.id;
+          if (state.stopIds.includes(id)) {
+            state.stopIds = state.stopIds.filter(x => x !== id);
+            ch.classList.remove("on");
+          } else {
+            state.stopIds.push(id);
+            ch.classList.add("on");
+          }
+          document.getElementById("v-stops-selected").textContent = state.stopIds.length
+            ? "Corridor: " + [document.getElementById("v-loc").value, ...state.stopIds].map(locName).join(" → ")
+            : "No stops selected — truck is idle at current location.";
+        };
+      });
+      const dl = new Date(); dl.setDate(dl.getDate() + 3);
+      document.getElementById("s-deadline").value = dl.toISOString().replace(/\.\d{3}Z$/, "+05:30");
+    }
+
+    async function refreshTables() {
+      const [vehicles, ships, overview] = await Promise.all([
+        j("/vehicles"),
+        j("/shipments?status=unassigned"),
+        j("/api/overview?advance=false"),
+      ]);
+      const routes = {};
+      (overview.fleet?.vehicles || []).forEach(v => { routes[v.vehicle_id] = v.route_label; });
+
+      document.getElementById("fleet-body").innerHTML = vehicles.map(v => {
+        const fill = v.capacity_kg ? Math.round(v.used_capacity_kg / v.capacity_kg * 1000) / 10 : 0;
+        const st = v.availability === "in_transit"
+          ? `<span class="badge">in transit</span>`
+          : `<span class="badge warn">${v.availability}</span>`;
+        return `<tr>
+          <td><strong>${v.vehicle_id}</strong></td>
+          <td>${v.primary_shipper_name || "—"}</td>
+          <td>${st}</td>
+          <td>${locName(v.current_location_id)}</td>
+          <td>${fill}%</td>
+          <td>${Math.round(v.remaining_kg)}</td>
+          <td>${routes[v.vehicle_id] || v.planned_route_id || "—"}</td>
+        </tr>`;
+      }).join("") || `<tr><td colspan="7">No trucks yet.</td></tr>`;
+
+      document.getElementById("ship-body").innerHTML = ships.map(s => `<tr>
+        <td><strong>${s.shipment_id}</strong></td>
+        <td>${s.shipper_name || "—"}</td>
+        <td>${locName(s.origin_id)} → ${locName(s.destination_id)}</td>
+        <td>${s.weight_kg} kg</td>
+        <td>${s.cargo_class}</td>
+        <td>${(s.deadline || "").slice(0, 16)}</td>
+      </tr>`).join("") || `<tr><td colspan="6">No open loads — all assigned or none created.</td></tr>`;
+    }
+
+    document.getElementById("btn-add-vehicle").onclick = async () => {
+      try {
+        const body = {
+          vehicle_id: document.getElementById("v-id").value || null,
+          primary_shipper_name: document.getElementById("v-shipper").value || null,
+          current_location_id: document.getElementById("v-loc").value,
+          availability: document.getElementById("v-status").value,
+          capacity_kg: +document.getElementById("v-kg").value,
+          capacity_m3: +document.getElementById("v-m3").value,
+          used_capacity_kg: +document.getElementById("v-used-kg").value || 0,
+          onboard_cargo_class: document.getElementById("v-cargo").value,
+          fixed_cost: +document.getElementById("v-fixed").value,
+          variable_cost_per_km: +document.getElementById("v-var").value,
+          route_stop_ids: state.stopIds.filter(id => id !== document.getElementById("v-loc").value),
+          speed_kmh: document.getElementById("v-status").value === "in_transit" ? 40 : 0,
+        };
+        const res = await j("/vehicles", {
+          method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body),
+        });
+        toast(`NEW_VEHICLE ${res.vehicle_id}` + (res.route_id ? ` · route ${res.route_id}` : ""));
+        state.stopIds = [];
+        document.querySelectorAll("#v-stops-chips .chip").forEach(c => c.classList.remove("on"));
+        document.getElementById("v-stops-selected").textContent = "No stops selected — truck is idle at current location.";
+        await refreshTables();
+      } catch (e) { toast("Add truck failed: " + e.message); }
+    };
+
+    document.getElementById("btn-add-ship").onclick = async () => {
+      try {
+        const body = {
+          shipper_name: document.getElementById("s-shipper").value,
+          cargo_class: document.getElementById("s-cargo").value,
+          origin_id: document.getElementById("s-origin").value,
+          destination_id: document.getElementById("s-dest").value,
+          weight_kg: +document.getElementById("s-kg").value,
+          volume_m3: +document.getElementById("s-m3").value,
+          deadline: document.getElementById("s-deadline").value,
+        };
+        const res = await j("/shipments", {
+          method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body),
+        });
+        toast(`NEW_SHIPMENT ${res.shipment.shipment_id} — open load created`);
+        await refreshTables();
+      } catch (e) { toast("Add load failed: " + e.message); }
+    };
+
+    document.getElementById("btn-reset").onclick = async () => {
+      if (!confirm("Reset all demo data? Custom trucks/loads will be wiped.")) return;
+      try {
+        await j("/admin/seed?reset=true", { method: "POST" });
+        toast("Demo data reset");
+        await refreshTables();
+      } catch (e) { toast(e.message); }
+    };
+
+    j("/api/locations").then(locs => {
+      state.locations = locs;
+      fillSelects();
+      return refreshTables();
+    }).catch(e => toast("API offline — start logipilot-api"));
+  </script>
+</body>
+</html>

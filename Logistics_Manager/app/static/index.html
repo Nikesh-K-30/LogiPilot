@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FreightMesh / LogiPilot — Operations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a1412; --panel: rgba(14, 28, 24, 0.92); --ink: #e7f2ec; --muted: #8aa396;
+      --line: rgba(231, 242, 236, 0.12); --accent: #2fd67b; --accent-dim: rgba(47, 214, 123, 0.14);
+      --warn: #e8b45a; --danger: #ef6b6b; --info: #5eb5e8; --radius: 14px;
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background:
+        radial-gradient(900px 480px at 8% -5%, #1a3f30 0%, transparent 55%),
+        radial-gradient(700px 400px at 95% 5%, #243a2c 0%, transparent 45%),
+        linear-gradient(165deg, #07110e, #0d1a16 50%, #0a1412);
+    }
+    .shell { max-width: 1440px; margin: 0 auto; padding: 1rem 1.1rem 2rem; display: grid; gap: 0.9rem; }
+    header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.8rem; align-items: flex-end; }
+    .brand { font-family: Sora, sans-serif; font-weight: 700; font-size: clamp(1.4rem, 3vw, 2rem); color: var(--accent); letter-spacing: -0.03em; }
+    .subtitle { color: var(--muted); max-width: 40rem; line-height: 1.45; font-size: 0.92rem; margin-top: 0.2rem; }
+    .pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .pill { font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; padding: 0.3rem 0.5rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    .pill.live { color: var(--accent); background: var(--accent-dim); border-color: rgba(47,214,123,.35); }
+    .kpis { display: grid; grid-template-columns: repeat(2,1fr); gap: 0.55rem; }
+    @media (min-width: 720px) { .kpis { grid-template-columns: repeat(3,1fr); } }
+    @media (min-width: 1100px) { .kpis { grid-template-columns: repeat(6,1fr); } }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem 0.85rem; box-shadow: var(--shadow); }
+    .kpi .label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .kpi .value { font-family: Sora, sans-serif; font-size: 1.35rem; font-weight: 700; margin-top: 0.2rem; }
+    .kpi .hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.15rem; }
+    .layout { display: grid; gap: 0.9rem; grid-template-columns: 1fr; }
+    @media (min-width: 1100px) { .layout { grid-template-columns: 1.25fr 1fr 0.95fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 0.95rem; box-shadow: var(--shadow); }
+    .panel h2 { margin: 0 0 0.25rem; font-family: Sora, sans-serif; font-size: 0.92rem; }
+    .help { color: var(--muted); font-size: 0.8rem; margin: 0 0 0.65rem; line-height: 1.4; }
+    #map { height: min(46vh, 420px); border-radius: 12px; border: 1px solid var(--line); }
+    .list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 420px; overflow: auto; }
+    .card, .fleet-row, .ship-row {
+      border: 1px solid var(--line); border-radius: 12px; padding: 0.7rem 0.75rem; background: rgba(0,0,0,.22); cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .card:hover, .fleet-row:hover, .ship-row:hover { border-color: rgba(47,214,123,.45); background: rgba(47,214,123,.06); }
+    .card h3, .ship-row strong { margin: 0; font-size: 0.92rem; font-family: Sora, sans-serif; }
+    .meta { color: var(--muted); font-size: 0.76rem; margin-top: 0.2rem; line-height: 1.35; }
+    .stats { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.45rem; }
+    .stat { font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; padding: 0.22rem 0.4rem; border-radius: 7px; background: var(--accent-dim); color: var(--accent); }
+    .stat.neutral { background: rgba(94,181,232,.12); color: var(--info); }
+    .stat.warn { background: rgba(232,180,90,.14); color: var(--warn); }
+    .stat.danger { background: rgba(239,107,107,.14); color: var(--danger); }
+    .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.55rem; }
+    button, .btn {
+      font: inherit; border: 0; border-radius: 10px; padding: 0.5rem 0.8rem; background: var(--accent);
+      color: #062015; font-weight: 600; cursor: pointer;
+    }
+    button.secondary, .btn.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); margin-top: 0.3rem; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--accent); }
+    .bottom { display: grid; gap: 0.9rem; grid-template-columns: 1fr; }
+    @media (min-width: 900px) { .bottom { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1200px) { .bottom { grid-template-columns: 1.1fr 1fr 1.1fr; } }
+    textarea, input, select {
+      width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #07110e;
+      color: var(--ink); padding: 0.55rem 0.65rem; font: inherit; margin-bottom: 0.4rem;
+    }
+    label { display: block; font-size: 0.72rem; color: var(--muted); margin: 0.25rem 0 0.15rem; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.55rem; }
+    .activity { max-height: 420px; overflow: auto; display: flex; flex-direction: column; gap: 0.45rem; }
+    .act {
+      border-left: 3px solid var(--info); padding: 0.45rem 0.55rem; background: rgba(0,0,0,.18); border-radius: 0 8px 8px 0;
+      font-size: 0.8rem; line-height: 1.4;
+    }
+    .act.reject { border-color: var(--danger); }
+    .act.recommend, .act.accept { border-color: var(--accent); }
+    .act .who { font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; color: var(--accent); margin-bottom: 0.15rem; }
+    .drawer-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 40;
+      justify-content: flex-end;
+    }
+    .drawer-backdrop.open { display: flex; }
+    .drawer {
+      width: min(420px, 100%); background: #0e1c18; border-left: 1px solid var(--line);
+      padding: 1.1rem; overflow: auto; box-shadow: var(--shadow);
+    }
+    .drawer h2 { font-family: Sora, sans-serif; margin: 0 0 0.5rem; }
+    .check { margin: 0.35rem 0; font-size: 0.86rem; }
+    .toast {
+      position: fixed; bottom: 1rem; right: 1rem; background: #10241c; border: 1px solid rgba(47,214,123,.4);
+      padding: 0.7rem 0.9rem; border-radius: 10px; display: none; z-index: 60; max-width: 24rem; font-size: 0.88rem;
+    }
+    .empty { color: var(--muted); font-size: 0.85rem; padding: 0.4rem 0; }
+    .chat-out { margin-top: 0.5rem; font-size: 0.88rem; line-height: 1.5; min-height: 2.5rem; }
+    .chat-out h1, .chat-out h2, .chat-out h3 { font-family: Sora, sans-serif; margin: 0.7rem 0 0.35rem; font-size: 0.95rem; color: var(--accent); }
+    .chat-out ul, .chat-out ol { margin: 0.35rem 0 0.55rem 1.1rem; padding: 0; }
+    .chat-out li { margin: 0.2rem 0; }
+    .chat-out p { margin: 0.35rem 0; }
+    .chat-out strong { color: #fff; }
+    .chat-src { font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; color: var(--muted); margin-bottom: 0.35rem; }
+    .cap-row { display: grid; grid-template-columns: 1.2fr 0.7fr 0.7fr 0.7fr; gap: 0.25rem; font-size: 0.78rem; padding: 0.35rem 0; border-bottom: 1px solid var(--line); }
+    .cap-row.head { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; }
+    .cap-evt { font-size: 0.72rem; color: var(--muted); margin: 0.1rem 0 0.1rem 0.2rem; }
+    .row-inline { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <div class="brand">FreightMesh · LogiPilot</div>
+        <div style="margin-top:0.45rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+          <a href="/" style="color:#2fd67b;font-size:0.85rem;text-decoration:none;font-weight:600">Operations</a>
+          <span style="color:#8aa396">·</span>
+          <a href="/admin" style="color:#8aa396;font-size:0.85rem;text-decoration:none">Admin · Fleet &amp; loads</a>
+        </div>
+        <div class="subtitle">
+          Multi-agent freight consolidation: company operators negotiate spare capacity,
+          Compliance blocks unsafe merges, and you approve the plan. Map GPS is simulated for the demo.
+        </div>
+      </div>
+      <div class="pills">
+        <span class="pill live" id="live-pill">● Simulated live GPS</span>
+        <span class="pill" id="data-pill">data…</span>
+        <span class="pill" id="poll-pill">updating…</span>
+      </div>
+    </header>
+
+    <section class="kpis" id="kpis"></section>
+
+    <section class="layout">
+      <div class="panel">
+        <h2>Live network map</h2>
+        <p class="help">Click a truck below or on the map to inspect spare capacity. Green = in transit.</p>
+        <div id="map"></div>
+        <div class="actions">
+          <button type="button" class="secondary" id="btn-tick">Advance positions</button>
+          <button type="button" class="secondary" id="btn-reset">Reset demo data</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Potential consolidations</h2>
+        <p class="help">Ranked by tools. Open <strong>Why this?</strong> for the full constraint checklist.</p>
+        <div class="list" id="opps"></div>
+        <h2 style="margin-top:0.9rem">Rejected (why not)</h2>
+        <p class="help">Hard constraints that blocked a merge.</p>
+        <div class="list" id="rejected" style="max-height:180px"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Agent activity</h2>
+        <p class="help">Coordinator ↔ company operators ↔ Compliance — FreightMesh negotiation transcript.</p>
+        <div class="activity" id="activity"></div>
+        <div class="actions">
+          <button type="button" class="secondary" id="btn-negotiate">Re-run negotiation</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="bottom">
+      <div class="panel">
+        <h2>Fleet status</h2>
+        <p class="help">Click a truck to focus the map and see details.</p>
+        <div id="fleet-list"></div>
+      </div>
+      <div class="panel">
+        <h2>Open shipments</h2>
+        <p class="help">Click a load to find matches for it only.</p>
+        <div class="list" id="shipments" style="max-height:260px"></div>
+        <h2 style="margin-top:0.9rem">Add new load</h2>
+        <p class="help">Creates a NEW_SHIPMENT event and re-evaluates pooling options.</p>
+        <div class="form-grid">
+          <div>
+            <label>Shipper name</label>
+            <input id="f-shipper" value="NewShipper Co" />
+          </div>
+          <div>
+            <label>Cargo class</label>
+            <select id="f-cargo">
+              <option value="general">general</option>
+              <option value="food">food</option>
+              <option value="hazardous">hazardous</option>
+            </select>
+          </div>
+          <div>
+            <label>Origin</label>
+            <select id="f-origin"></select>
+          </div>
+          <div>
+            <label>Destination</label>
+            <select id="f-dest"></select>
+          </div>
+          <div>
+            <label>Weight (kg)</label>
+            <input id="f-weight" type="number" value="2500" min="1" />
+          </div>
+          <div>
+            <label>Volume (m³)</label>
+            <input id="f-vol" type="number" value="4" min="0.1" step="0.1" />
+          </div>
+        </div>
+        <label>Deadline (ISO with timezone)</label>
+        <input id="f-deadline" />
+        <div class="actions">
+          <button type="button" id="btn-add-load">Add load</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Ask the Logistics Manager</h2>
+        <p class="help">Uses Gemini when <code>GOOGLE_API_KEY</code> is set; otherwise deterministic tools. Errors show here.</p>
+        <textarea id="chat-in" rows="3" placeholder="Find the cheapest way to deliver today's Chennai shipments"></textarea>
+        <div class="row-inline">
+          <label style="margin:0">What-if priority</label>
+          <select id="wf-priority" style="width:auto">
+            <option value="cost">cost</option>
+            <option value="carbon">carbon</option>
+            <option value="utilization">utilization</option>
+          </select>
+          <label style="margin:0">Delay hours</label>
+          <input id="wf-delay" type="number" value="0" min="0" step="1" style="width:4rem;margin:0" />
+          <button type="button" class="secondary" id="btn-whatif">Run what-if</button>
+        </div>
+        <div class="actions">
+          <button type="button" id="btn-chat">Ask</button>
+          <button type="button" class="secondary" id="btn-opt">Optimize corridor</button>
+        </div>
+        <div class="chat-out" id="chat-out"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="drawer-backdrop" id="drawer">
+    <div class="drawer" role="dialog" aria-modal="true">
+      <div class="actions" style="justify-content:space-between;margin-top:0">
+        <h2 id="drawer-title">Details</h2>
+        <button type="button" class="secondary" id="drawer-close">Close</button>
+      </div>
+      <div id="drawer-body"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const state = { map: null, markers: {}, routes: [], data: null, locations: [] };
+
+    function money(n) { return "₹" + Math.round(n || 0).toLocaleString("en-IN"); }
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg; el.style.display = "block";
+      setTimeout(() => (el.style.display = "none"), 3500);
+    }
+    async function j(url, opts) {
+      const r = await fetch(url, opts);
+      let data;
+      try { data = await r.json(); } catch { data = { detail: await r.text() }; }
+      if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+      return data;
+    }
+    function openDrawer(title, html) {
+      document.getElementById("drawer-title").textContent = title;
+      document.getElementById("drawer-body").innerHTML = html;
+      document.getElementById("drawer").classList.add("open");
+    }
+    function closeDrawer() { document.getElementById("drawer").classList.remove("open"); }
+
+    function initMap() {
+      state.map = L.map("map", { zoomControl: true }).setView([17.5, 76.5], 5);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap", maxZoom: 18,
+      }).addTo(state.map);
+    }
+    function truckIcon(color) {
+      return L.divIcon({
+        className: "",
+        html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 0 3px ${color}55"></div>`,
+        iconSize: [14,14], iconAnchor: [7,7],
+      });
+    }
+
+    function renderKpis(k) {
+      const items = [
+        { label: "Opportunities", value: k.opportunities, hint: "feasible plans" },
+        { label: "Est. savings", value: money(k.estimated_savings_inr), hint: `${k.pct_cost_saved}% vs 2nd truck` },
+        { label: "% cost saved", value: `${k.pct_cost_saved}%`, hint: "estimate" },
+        { label: "In transit", value: k.vehicles_in_transit, hint: "trucks currently on the road" },
+        { label: "Open loads", value: k.open_shipments, hint: "shipments waiting for a truck" },
+        { label: "Avg fill", value: `${k.avg_fleet_utilization_pct}%`, hint: "fleet utilization" },
+      ];
+      document.getElementById("kpis").innerHTML = items.map(i =>
+        `<div class="kpi"><div class="label">${i.label}</div><div class="value">${i.value}</div><div class="hint">${i.hint}</div></div>`
+      ).join("");
+    }
+
+    function focusVehicle(vehicleId) {
+      const m = state.markers[vehicleId];
+      if (m) {
+        state.map.setView(m.getLatLng(), 7, { animate: true });
+        m.openPopup();
+      }
+      const v = ((state.data && state.data.fleet && state.data.fleet.vehicles) || []).find(x => x.vehicle_id === vehicleId);
+      if (!v) return;
+      openDrawer(vehicleId, `<div class="meta">Loading capacity profile…</div>`);
+      j(`/vehicles/${vehicleId}/capacity-profile`).then(profile => {
+        const rows = (profile.timeline || []).map(step => {
+          const ev = (step.events || []).map(e =>
+            `<div class="cap-evt">${e.type === "drop" ? "↓ drop" : "↑ pick"} ${e.shipper_name || e.shipment_id}: ${e.weight_kg} kg</div>`
+          ).join("");
+          return `<div class="cap-row">
+            <div><strong>${step.location_name}</strong>${ev}</div>
+            <div>${step.fill_pct}%</div>
+            <div>${Math.round(step.onboard_kg)} kg</div>
+            <div>${Math.round(step.remaining_kg)} kg</div>
+          </div>`;
+        }).join("");
+        openDrawer(vehicleId, `
+          <div class="meta">Simulated live · ${v.availability}</div>
+          <p><strong>${v.primary_shipper_name || "No primary shipper"}</strong></p>
+          <div class="check">Route: ${v.route_label || "—"}</div>
+          <div class="check"><strong>Now:</strong> filled ${profile.fill_pct_now}% ·
+            onboard ${Math.round(profile.used_capacity_kg)} / ${Math.round(profile.capacity_kg)} kg ·
+            spare <strong>${Math.round(profile.remaining_kg)} kg</strong></div>
+          <div class="check">Cargo onboard: ${v.onboard_cargo_class}</div>
+          <h3 style="font-family:Sora,sans-serif;font-size:0.88rem;margin:0.8rem 0 0.35rem">Space after each stop</h3>
+          <p class="meta">Shows how drops free capacity for mid-corridor pickups.</p>
+          <div class="cap-row head"><div>Stop</div><div>Fill</div><div>Onboard</div><div>Spare</div></div>
+          ${rows || '<div class="empty">No corridor timeline.</div>'}
+          <p class="meta" style="margin-top:0.6rem"><strong>Find loads for this truck</strong> asks LoadLink:
+            which open shipments can share this truck’s spare capacity (capacity, detour, cargo, deadline).</p>
+          <div class="actions"><button type="button" id="d-match-veih">Find loads for this truck</button></div>
+        `);
+        document.getElementById("d-match-veih").onclick = async () => {
+          try {
+            const res = await j("/loads/match", {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({ vehicle_ids: [vehicleId], corridor_mode: true }),
+            });
+            state.data.opportunities = (res.feasible_matches || []).map(enrichOpp);
+            renderOpps(state.data.opportunities);
+            renderRejected(res.rejected || []);
+            toast(`Open loads that fit ${vehicleId}: ${(res.feasible_matches||[]).length}`);
+            closeDrawer();
+          } catch (e) { toast(String(e.message || e)); }
+        };
+      }).catch(e => {
+        openDrawer(vehicleId, `<div class="empty">Could not load capacity profile: ${e.message}</div>`);
+      });
+    }
+
+    function enrichOpp(m) {
+      const sav = m.consolidation_savings || {};
+      const before = m.capacity_utilization_before || {};
+      const after = m.capacity_utilization_after || {};
+      const stand = +sav.standalone_truck_cost || 0;
+      const avoided = +sav.avoided_truck_savings || 0;
+      return {
+        match_id: m.match_id,
+        vehicle_id: m.vehicle_id,
+        shipment_ids: m.shipment_ids,
+        shippers: m.shipper_names || [],
+        title: (m.shipper_names || []).join(" + ") || (m.shipment_ids||[]).join(","),
+        rank_score: m.rank_score,
+        incremental_km: m.incremental_distance_km,
+        savings_inr: avoided,
+        pct_cost_saved: stand ? Math.round(avoided / stand * 1000) / 10 : 0,
+        utilization_before_pct: Math.round(Math.max(before.kg||0, before.m3||0)*1000)/10,
+        utilization_after_pct: Math.round(Math.max(after.kg||0, after.m3||0)*1000)/10,
+        reasons: m.reasons || [],
+        explanation: sav.explanation || "",
+        cargo_classes: m.cargo_classes || [],
+        currency: m.currency || "INR",
+        route_legs: m.route_legs || [],
+        raw: m,
+      };
+    }
+
+    function showWhy(o) {
+      const checks = (o.reasons || []).map(r => `<div class="check">✓ ${r}</div>`).join("")
+        || `<div class="check">No reason list returned.</div>`;
+      openDrawer("Why this plan?", `
+        <p><strong>${o.title}</strong></p>
+        <div class="meta">${(o.shipment_ids||[]).join(", ")} → ${o.vehicle_id}</div>
+        <div class="stats" style="margin:0.6rem 0">
+          <span class="stat">Save ${money(o.savings_inr)}</span>
+          <span class="stat">${o.pct_cost_saved}% cost saved</span>
+          <span class="stat neutral">${o.utilization_before_pct}% → ${o.utilization_after_pct}% fill</span>
+          <span class="stat warn">+${(o.incremental_km||0).toFixed(0)} km detour</span>
+        </div>
+        <h3 style="font-family:Sora,sans-serif;font-size:0.9rem">Constraint checklist</h3>
+        ${checks}
+        <p style="margin-top:0.8rem;font-size:0.86rem;line-height:1.45">${o.explanation || "No narrative explanation from tools."}</p>
+        <div class="actions">
+          <button type="button" data-approve-drawer="${o.vehicle_id}" data-ships='${JSON.stringify(o.shipment_ids)}'>Approve assignment</button>
+        </div>
+      `);
+      const btn = document.querySelector("[data-approve-drawer]");
+      if (btn) btn.onclick = () => approve(btn.dataset.approveDrawer, JSON.parse(btn.dataset.ships));
+    }
+
+    function renderMap(data) {
+      state.routes.forEach(l => state.map.removeLayer(l));
+      state.routes = [];
+      (data.routes || []).forEach(r => {
+        if (!r.coordinates || r.coordinates.length < 2) return;
+        const line = L.polyline(r.coordinates.map(([a,b]) => [a,b]), { color: "#5eb5e8", weight: 3, opacity: 0.7, dashArray: "6 8" }).addTo(state.map);
+        line.bindPopup(`Route ${r.route_id}`);
+        state.routes.push(line);
+      });
+      const vehicles = (data.fleet && data.fleet.vehicles) || [];
+      const seen = new Set();
+      vehicles.forEach(v => {
+        if (v.latitude == null) return;
+        seen.add(v.vehicle_id);
+        const color = v.availability === "in_transit" ? "#2fd67b" : "#e8b45a";
+        const html = `<strong>${v.vehicle_id}</strong><br/>${v.primary_shipper_name || "—"}<br/>${v.route_label || ""}<br/>Fill ${v.utilization_pct}%`;
+        if (state.markers[v.vehicle_id]) {
+          state.markers[v.vehicle_id].setLatLng([v.latitude, v.longitude]);
+          state.markers[v.vehicle_id].setIcon(truckIcon(color));
+          state.markers[v.vehicle_id].setPopupContent(html);
+        } else {
+          const mk = L.marker([v.latitude, v.longitude], { icon: truckIcon(color) }).addTo(state.map).bindPopup(html);
+          mk.on("click", () => focusVehicle(v.vehicle_id));
+          state.markers[v.vehicle_id] = mk;
+        }
+      });
+      Object.keys(state.markers).forEach(id => {
+        if (!seen.has(id)) { state.map.removeLayer(state.markers[id]); delete state.markers[id]; }
+      });
+    }
+
+    function renderOpps(opps) {
+      const el = document.getElementById("opps");
+      if (!opps.length) { el.innerHTML = `<div class="empty">No feasible consolidations. Add a load or reset demo data.</div>`; return; }
+      el.innerHTML = opps.map((o, idx) => `
+        <article class="card" data-idx="${idx}">
+          <h3>${o.title}</h3>
+          <div class="meta">${(o.shipment_ids||[]).join(", ")} on ${o.vehicle_id}<br/>${(o.route_legs&&o.route_legs.length)?o.route_legs.join(" · "):"Route via corridor"} · detour ~${(o.incremental_km||0).toFixed(0)} km</div>
+          <div class="stats">
+            <span class="stat">Save ${money(o.savings_inr)}</span>
+            <span class="stat">${o.pct_cost_saved}%</span>
+            <span class="stat neutral">${o.utilization_before_pct}% → ${o.utilization_after_pct}%</span>
+          </div>
+          <div class="actions">
+            <button type="button" class="secondary" data-why="${idx}">Why this?</button>
+            <button type="button" data-ap="${idx}">Approve</button>
+          </div>
+        </article>`).join("");
+      el.querySelectorAll("[data-why]").forEach(b => b.onclick = (e) => { e.stopPropagation(); showWhy(opps[+b.dataset.why]); });
+      el.querySelectorAll("[data-ap]").forEach(b => b.onclick = (e) => {
+        e.stopPropagation();
+        const o = opps[+b.dataset.ap];
+        approve(o.vehicle_id, o.shipment_ids);
+      });
+      el.querySelectorAll(".card").forEach(c => c.onclick = () => showWhy(opps[+c.dataset.idx]));
+    }
+
+    function renderRejected(rows) {
+      const el = document.getElementById("rejected");
+      const uniq = [];
+      const seen = new Set();
+      (rows || []).forEach(r => {
+        const key = `${r.rejection_code||r.code}|${(r.shipment_ids||[]).join(",")}|${r.vehicle_id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        uniq.push(r);
+      });
+      if (!uniq.length) { el.innerHTML = `<div class="empty">No rejections in this pass.</div>`; return; }
+      el.innerHTML = uniq.slice(0, 8).map(r => `
+        <div class="card" style="cursor:default">
+          <h3 style="color:var(--danger)">${r.rejection_code || r.code || "REJECTED"}</h3>
+          <div class="meta">${(r.shipper_names||r.shippers||[]).join(" + ") || (r.shipment_ids||[]).join(", ")} vs ${r.vehicle_id}</div>
+          <div class="meta">${(r.reasons||[]).join(" · ")}</div>
+        </div>`).join("");
+    }
+
+    function renderActivity(rows) {
+      const el = document.getElementById("activity");
+      if (!rows || !rows.length) { el.innerHTML = `<div class="empty">No agent activity yet.</div>`; return; }
+      el.innerHTML = rows.map(a => `
+        <div class="act ${a.kind || ""}">
+          <div class="who">${a.actor} · ${a.kind || "message"}</div>
+          <div>${a.text}</div>
+        </div>`).join("");
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function renderFleet(vehicles) {
+      document.getElementById("fleet-list").innerHTML = vehicles.map(v => `
+        <div class="fleet-row" data-vid="${v.vehicle_id}">
+          <div>
+            <strong>${v.vehicle_id}</strong>
+            <div class="meta">${v.primary_shipper_name || "—"} · ${v.availability} · ${v.route_label || "idle"}</div>
+            <div class="bar"><span style="width:${Math.min(100, v.utilization_pct)}%"></span></div>
+          </div>
+          <div class="stat">${v.utilization_pct}%</div>
+        </div>`).join("");
+      document.querySelectorAll("#fleet-list .fleet-row").forEach(row => {
+        row.onclick = () => focusVehicle(row.dataset.vid);
+      });
+    }
+
+    function renderShipments(rows) {
+      const el = document.getElementById("shipments");
+      if (!rows.length) { el.innerHTML = `<div class="empty">No open shipments. Add a load.</div>`; return; }
+      el.innerHTML = rows.map(s => `
+        <div class="ship-row" data-sid="${s.shipment_id}">
+          <strong>${s.shipper_name || s.shipment_id}</strong>
+          <div class="meta">${s.shipment_id} · ${s.origin_id} → ${s.destination_id}<br/>${s.weight_kg} kg · ${s.cargo_class}</div>
+        </div>`).join("");
+      el.querySelectorAll(".ship-row").forEach(row => {
+        row.onclick = async () => {
+          const sid = row.dataset.sid;
+          try {
+            const res = await j("/loads/match", {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({ shipment_ids: [sid], corridor_mode: true }),
+            });
+            const opps = (res.feasible_matches || []).map(enrichOpp);
+            renderOpps(opps);
+            renderRejected(res.rejected || []);
+            openDrawer(`Matches for ${sid}`, `
+              <p class="meta">Only options for this load</p>
+              ${opps.length ? opps.map(o => `<div class="check"><strong>${o.title}</strong> on ${o.vehicle_id} — ${money(o.savings_inr)}</div>`).join("") : "<div class='empty'>No feasible truck.</div>"}
+              <p style="margin-top:0.6rem;font-size:0.84rem">Full list updated in Potential consolidations.</p>
+            `);
+            toast(`${opps.length} match(es) for ${sid}`);
+          } catch (e) { toast(String(e.message || e)); }
+        };
+      });
+    }
+
+    function fillLocationSelects(locs) {
+      state.locations = locs || [];
+      const opts = state.locations.map(l => `<option value="${l.location_id}">${l.name} (${l.location_id})</option>`).join("");
+      document.getElementById("f-origin").innerHTML = opts;
+      document.getElementById("f-dest").innerHTML = opts;
+      document.getElementById("f-origin").value = "LOC-HYD";
+      document.getElementById("f-dest").value = "LOC-MAA";
+      const dl = new Date(); dl.setDate(dl.getDate() + 3);
+      document.getElementById("f-deadline").value = dl.toISOString().replace(/\.\d{3}Z$/, "+05:30");
+    }
+
+    async function refresh(advance = true) {
+      const data = await j(`/api/overview?advance=${advance ? "true" : "false"}`);
+      state.data = data;
+      if (!state.locations.length && data.locations) fillLocationSelects(data.locations);
+      renderKpis(data.kpis);
+      renderMap(data);
+      renderOpps(data.opportunities || []);
+      renderRejected(data.rejected_preview || []);
+      renderFleet((data.fleet && data.fleet.vehicles) || []);
+      renderShipments(data.unassigned_shipments || []);
+      renderActivity(data.agent_activity || []);
+      document.getElementById("data-pill").textContent = `source: ${data.data_class} SQLite`;
+      document.getElementById("poll-pill").textContent = `updated ${new Date().toLocaleTimeString()}`;
+      return data;
+    }
+
+    async function approve(vehicleId, shipmentIds) {
+      try {
+        const tok = await j(`/loads/approval-token?actor=${encodeURIComponent("user:dispatcher-01")}&vehicle_id=${encodeURIComponent(vehicleId)}`, { method: "POST" });
+        await j("/loads/assign", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            vehicle_id: vehicleId, shipment_ids: shipmentIds,
+            actor: "user:dispatcher-01", approval_token: tok.approval_token,
+            rationale: "Approved from operations console",
+          }),
+        });
+        toast(`Assigned ${shipmentIds.join(", ")} → ${vehicleId}`);
+        closeDrawer();
+        await refresh(false);
+      } catch (e) { toast(String(e.message || e)); }
+    }
+
+    document.getElementById("drawer-close").onclick = closeDrawer;
+    document.getElementById("drawer").addEventListener("click", (e) => { if (e.target.id === "drawer") closeDrawer(); });
+
+    document.getElementById("btn-tick").onclick = async () => {
+      try { await j("/api/fleet/tick?step_pct=3", { method: "POST" }); await refresh(false); }
+      catch (e) { toast(String(e.message || e)); }
+    };
+    document.getElementById("btn-reset").onclick = async () => {
+      try { await j("/admin/seed?reset=true", { method: "POST" }); toast("Demo data reset"); await refresh(false); }
+      catch (e) { toast(String(e.message || e)); }
+    };
+    document.getElementById("btn-negotiate").onclick = async () => {
+      try {
+        const neg = await j("/api/negotiate", { method: "POST", headers: {"Content-Type":"application/json"}, body: "{}" });
+        renderActivity(neg.activity || []);
+        renderOpps((neg.feasible_matches || []).map(enrichOpp));
+        renderRejected(neg.rejected || []);
+        toast("Negotiation re-run");
+      } catch (e) { toast(String(e.message || e)); }
+    };
+    document.getElementById("btn-whatif").onclick = async () => {
+      try {
+        const body = {
+          prioritize: document.getElementById("wf-priority").value,
+          allow_delay_hours: +document.getElementById("wf-delay").value || 0,
+        };
+        const neg = await j("/api/what-if", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+        renderActivity(neg.activity || []);
+        renderOpps((neg.feasible_matches || []).map(enrichOpp));
+        const rec = neg.recommendation;
+        renderChat("negotiation_what_if", rec
+          ? `### What-if result\n\n**Priority:** ${body.prioritize} · **Delay allowed:** ${body.allow_delay_hours}h\n\n**Best plan:** ${(rec.shipment_ids||[]).join(", ")} → **${rec.vehicle_id}**\n\n**Estimated savings:** ${money(rec.savings_inr)}\n\n${rec.explanation||""}`
+          : `What-if: no feasible plan under these settings.`);
+        toast("What-if recalculated");
+      } catch (e) { toast(String(e.message || e)); }
+    };
+    function renderChat(source, answer) {
+      const out = document.getElementById("chat-out");
+      const src = source === "gemini_manager" ? "AI Logistics Manager" :
+        source === "loadlink_matching" ? "LoadLink tools" :
+        source === "negotiation" ? "Negotiation / Compliance" :
+        source === "routewise_routing" ? "RouteWise" : (source || "Assistant");
+      const html = (window.marked ? marked.parse(answer || "") : (answer || "").replace(/</g,"&lt;"));
+      out.innerHTML = `<div class="chat-src">${src}</div><div class="chat-md">${html}</div>`;
+    }
+    document.getElementById("btn-chat").onclick = async () => {
+      const message = (document.getElementById("chat-in").value || "").trim();
+      if (!message) {
+        toast("Type a question first — e.g. Find cheapest Chennai consolidations");
+        return;
+      }
+      const out = document.getElementById("chat-out");
+      out.innerHTML = `<div class="chat-src">Working…</div>`;
+      try {
+        const res = await j("/chat", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            message,
+            prioritize: document.getElementById("wf-priority").value,
+            allow_delay_hours: +document.getElementById("wf-delay").value || 0,
+          }),
+        });
+        renderChat(res.source, res.answer);
+      } catch (e) {
+        out.innerHTML = "";
+        toast("Copilot error: " + (e.message || e));
+      }
+    };
+    document.getElementById("btn-opt").onclick = async () => {
+      try {
+        const res = await j("/routes/optimize", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ depot_id: "LOC-MUM", vehicle_id: "VEH-001", route_id: "RTE-100" }),
+        });
+        renderChat("routewise_routing",
+          `### Route optimized\n\n**Baseline:** ${res.baseline.distance_km} km\n\n**Optimized:** ${res.optimized.distance_km} km\n\n**Distance saved:** ${res.savings.distance_km} km · **Fuel saved (est.):** ${money(res.savings.estimated_fuel_cost)}\n\nFeasible: **${res.feasible}**`);
+      } catch (e) { toast(String(e.message || e)); }
+    };
+    document.getElementById("btn-add-load").onclick = async () => {
+      try {
+        const body = {
+          shipper_name: document.getElementById("f-shipper").value || "NewShipper",
+          cargo_class: document.getElementById("f-cargo").value,
+          origin_id: document.getElementById("f-origin").value,
+          destination_id: document.getElementById("f-dest").value,
+          weight_kg: +document.getElementById("f-weight").value,
+          volume_m3: +document.getElementById("f-vol").value,
+          deadline: document.getElementById("f-deadline").value,
+        };
+        const res = await j("/shipments", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+        toast(`NEW_SHIPMENT ${res.shipment.shipment_id}`);
+        if (res.negotiation_preview && res.negotiation_preview.activity_tail) {
+          renderActivity([...(state.data?.agent_activity||[]), ...res.negotiation_preview.activity_tail]);
+        }
+        await refresh(false);
+      } catch (e) { toast("Add load failed: " + (e.message || e)); }
+    };
+
+    initMap();
+    j("/api/locations").then(fillLocationSelects).catch(() => {});
+    refresh(true).then(() => state.map.fitBounds([[8.5, 70],[28.5, 82]], { padding: [24,24] }))
+      .catch(err => toast("API offline — run: uv run logipilot-api"));
+    setInterval(() => refresh(true).catch(() => {}), 5000);
+  </script>
+</body>
+</html>

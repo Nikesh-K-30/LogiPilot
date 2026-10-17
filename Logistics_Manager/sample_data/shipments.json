@@ -1,0 +1,5 @@
+[
+  {"shipment_id": "SHP-1001", "shipper_name": "Northern Retail", "origin_id": "LOC-MUM", "destination_id": "LOC-MAA", "weight_kg": 8000, "cargo_class": "food", "status": "assigned"},
+  {"shipment_id": "SHP-2001", "shipper_name": "Deccan Goods", "origin_id": "LOC-HYD", "destination_id": "LOC-MAA", "weight_kg": 3000, "cargo_class": "food", "status": "unassigned"},
+  {"shipment_id": "SHP-2005", "shipper_name": "ChemHaul", "origin_id": "LOC-HYD", "destination_id": "LOC-MAA", "weight_kg": 500, "cargo_class": "hazardous", "status": "unassigned"}
+]

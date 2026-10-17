@@ -1,0 +1,17 @@
+[
+  {
+    "vehicle_id": "VEH-001",
+    "primary_shipper_name": "Northern Retail",
+    "capacity_kg": 13000,
+    "used_capacity_kg": 8000,
+    "onboard_cargo_class": "food",
+    "planned_route": "Mumbai → Pune → Hyderabad → Chennai"
+  },
+  {
+    "vehicle_id": "VEH-002",
+    "role": "counterfactual dedicated truck for savings estimate",
+    "capacity_kg": 5000,
+    "fixed_cost": 8000,
+    "variable_cost_per_km": 25
+  }
+]
